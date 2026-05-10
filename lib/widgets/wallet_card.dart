@@ -8,11 +8,7 @@ class WalletCard extends StatelessWidget {
   final WalletModel wallet;
   final VoidCallback? onTap;
 
-  const WalletCard({
-    super.key,
-    required this.wallet,
-    this.onTap,
-  });
+  const WalletCard({super.key, required this.wallet, this.onTap});
 
   /// Mengembalikan ikon yang sesuai berdasarkan tipe dompet
   IconData _getWalletIcon() {

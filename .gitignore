@@ -67,5 +67,8 @@ ios/Flutter/flutter_export_environment.sh
 # VS Code
 .vscode/
 
-# Environment / API Keys (PENTING!)
+# Environment / API Keys 
 lib/config/supabase_config.dart
+
+# Gemini
+lib/config/gemini_config.dart

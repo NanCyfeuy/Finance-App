@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
 import 'screens/home_screen.dart';
+import 'screens/saran_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,6 +48,10 @@ class MyApp extends StatelessWidget {
       ),
 
       home: const HomeScreen(),
+      routes: {
+        '/': (context) => const HomeScreen(),
+        '/saran': (context) => const SaranScreen(),
+      },
     );
   }
 }

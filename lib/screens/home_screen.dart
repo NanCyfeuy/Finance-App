@@ -4,6 +4,7 @@ import 'dashboard_screen.dart';
 import 'statistik_screen.dart';
 import 'dompet_screen.dart';
 import 'tambah_transaksi_screen.dart';
+import 'saran_screen.dart';
 
 /// HomeScreen adalah shell utama aplikasi yang mengelola navigasi
 /// antar halaman menggunakan bottom navigation bar floating.
@@ -26,9 +27,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Daftar halaman yang bisa diakses via navbar
   final List<Widget> _pages = const [
-    DashboardScreen(),  // index 0 - Dashboard
-    StatistikScreen(),  // index 1 - Statistik
-    DompetScreen(),     // index 2 - Dompet
+    DashboardScreen(), // index 0 - Dashboard
+    StatistikScreen(), // index 1 - Statistik
+    DompetScreen(), // index 2 - Dompet
+    SaranScreen(), // index 3 - Saran Keuangan AI
   ];
 
   /// Mengganti halaman aktif dan memberikan haptic feedback
@@ -57,10 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Gunakan IndexedStack agar state setiap halaman tetap terjaga
       // saat berpindah tab (tidak di-rebuild dari awal)
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _pages),
 
       // Sembunyikan default bottom nav bar karena kita buat custom
       extendBody: true,
@@ -133,6 +132,14 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icons.wallet_outlined,
               activeIcon: Icons.wallet_rounded,
               label: 'Dompet',
+            ),
+
+            // ── Tab Saran AI ─────────────────────────────────────────────────
+            _buildNavItem(
+              index: 3,
+              icon: Icons.auto_awesome_outlined,
+              activeIcon: Icons.auto_awesome_rounded,
+              label: 'AI Saran',
             ),
           ],
         ),
