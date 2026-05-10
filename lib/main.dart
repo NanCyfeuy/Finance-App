@@ -48,8 +48,9 @@ class MyApp extends StatelessWidget {
       ),
 
       home: const HomeScreen(),
+
       routes: {
-        '/': (context) => const HomeScreen(),
+        // '/': (context) => const HomeScreen(),
         '/saran': (context) => const SaranScreen(),
       },
     );

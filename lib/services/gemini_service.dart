@@ -13,7 +13,7 @@ class GeminiService {
 
   GeminiService() {
     _model = GenerativeModel(
-      model: 'gemini-1.5-flash', // model gratis & cepat
+      model: 'gemini-2.5-flash', // model gratis & cepat
       apiKey: GeminiConfig.apiKey,
     );
   }
@@ -49,7 +49,19 @@ Gunakan emoji yang relevan. Jawab maksimal 200 kata.
       // 4. Kembalikan hasil
       return response.text ?? 'Tidak ada saran yang tersedia.';
     } catch (e) {
-      return 'Gagal mendapatkan saran: $e';
+      // Cek jenis error
+      final errorMsg = e.toString();
+
+      if (errorMsg.contains('quota') || errorMsg.contains('rate')) {
+        return '⏳ Permintaan terlalu sering.\n\nCoba lagi dalam beberapa detik ya!';
+      } else if (errorMsg.contains('API key')) {
+        return '🔑 API Key tidak valid.\n\nCek kembali konfigurasi Gemini kamu.';
+      } else if (errorMsg.contains('network') ||
+          errorMsg.contains('connection')) {
+        return '📶 Tidak ada koneksi internet.\n\nPastikan HP kamu terhubung ke internet.';
+      } else {
+        return '❌ Gagal mendapatkan saran.\n\nCoba lagi beberapa saat.';
+      }
     }
   }
 
