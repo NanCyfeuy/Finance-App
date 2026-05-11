@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../models/transaction_model.dart';
 import '../models/wallet_model.dart';
 import '../services/transaction_service.dart';
 import '../utils/currency_formatter.dart';
 import '../widgets/transaction_card.dart';
 import '../widgets/wallet_card.dart';
+import 'tambah_transaksi_screen.dart';
+import 'semua_transaksi_screen.dart';
 
 /// Enum untuk filter periode tampilan ringkasan keuangan
 enum PeriodeFilter { hari, minggu, bulan, tahun, semua }
@@ -97,9 +98,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memuat data: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal memuat data: $e')));
       }
     }
   }
@@ -169,44 +170,124 @@ class _DashboardScreenState extends State<DashboardScreen> {
       .fold(0, (sum, t) => sum + t.nominal);
 
   /// Total saldo keseluruhan dari semua dompet
-  int get _totalSaldo =>
-      _daftarDompet.fold(0, (sum, w) => sum + w.saldo);
+  int get _totalSaldo => _daftarDompet.fold(0, (sum, w) => sum + w.saldo);
 
   // ─── Logic: Grouping Transaksi per Tanggal ───────────────────────────────────
 
-  /// Mengelompokkan transaksi berdasarkan tanggal (yyyy-MM-dd)
-  /// dan mengurutkan dari tanggal terbaru
-  Map<String, List<TransactionModel>> get _transaksiPerTanggal {
-    final Map<String, List<TransactionModel>> grouped = {};
-    for (final t in _transaksiFiltered) {
-      // Key berupa string tanggal untuk pengelompokan
-      final key = DateFormat('yyyy-MM-dd').format(t.tanggal);
-      grouped.putIfAbsent(key, () => []).add(t);
-    }
-    // Urutkan key dari terbaru ke terlama
-    final sortedKeys = grouped.keys.toList()
-      ..sort((a, b) => b.compareTo(a));
-    return {for (final k in sortedKeys) k: grouped[k]!};
+  /// Transaksi terbaru yang ditampilkan di dashboard (maksimal 3 item)
+  List<TransactionModel> get _latestTransaksi {
+    final latest = List<TransactionModel>.from(_transaksiFiltered);
+    latest.sort((a, b) => b.tanggal.compareTo(a.tanggal));
+    return latest.take(3).toList();
   }
 
-  /// Format tanggal untuk header grup transaksi
-  /// Contoh: "Sabtu, 9 Mei 2026"
-  String _formatTanggalHeader(String dateKey) {
-    final date = DateTime.parse(dateKey);
-    return DateFormat('EEEE, d MMMM yyyy', 'id_ID').format(date);
+  /// Terapkan perubahan saldo pada dompet default ketika menambah transaksi baru.
+  void _applyTransactionToWallet(TransactionModel transaction) {
+    final defaultIndex = _daftarDompet.indexWhere((wallet) => wallet.id == '1');
+    if (defaultIndex < 0) return;
+
+    final wallet = _daftarDompet[defaultIndex];
+    final delta = transaction.tipe == 'pemasukan'
+        ? transaction.nominal
+        : -transaction.nominal;
+    final updatedWallet = WalletModel(
+      id: wallet.id,
+      nama: wallet.nama,
+      tipe: wallet.tipe,
+      saldo: wallet.saldo + delta,
+      namaBank: wallet.namaBank,
+      warna: wallet.warna,
+    );
+
+    setState(() {
+      _daftarDompet[defaultIndex] = updatedWallet;
+    });
   }
 
-  /// Menghitung total nominal bersih per tanggal (pemasukan - pengeluaran)
-  int _totalPerTanggal(List<TransactionModel> transaksi) {
-    int total = 0;
-    for (final t in transaksi) {
-      if (t.tipe == 'pemasukan') {
-        total += t.nominal;
-      } else {
-        total -= t.nominal;
-      }
+  /// Buka layar tambah transaksi dan reload data saat transaksi baru disimpan.
+  Future<void> _openTambahTransaksi() async {
+    final newTransaction = await Navigator.push<TransactionModel?>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const TambahTransaksiScreen(),
+        fullscreenDialog: true,
+      ),
+    );
+
+    if (newTransaction != null) {
+      _applyTransactionToWallet(newTransaction);
+      _loadData();
     }
-    return total;
+  }
+
+  void _openAllTransactions() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SemuaTransaksiScreen()),
+    );
+  }
+
+  Future<void> _openEditTransaction(TransactionModel transaction) async {
+    final updated = await Navigator.push<TransactionModel?>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TambahTransaksiScreen(transaction: transaction),
+        fullscreenDialog: true,
+      ),
+    );
+
+    if (updated != null) {
+      await _loadData();
+    }
+  }
+
+  Future<void> _deleteTransaction(TransactionModel transaction) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF12141E),
+          title: const Text(
+            'Hapus transaksi',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: Text(
+            'Yakin ingin menghapus transaksi "${transaction.judul}"?',
+            style: const TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE74C3C),
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Hapus'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _transactionService.delete(transaction.id!);
+      if (!mounted) return;
+      await _loadData();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Transaksi berhasil dihapus.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Gagal menghapus transaksi: $e')),
+      );
+    }
   }
 
   // ─── Build ───────────────────────────────────────────────────────────────────
@@ -215,6 +296,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF12141E), // latar belakang gelap utama
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openTambahTransaksi,
+        backgroundColor: const Color(0xFF4A90D9),
+        child: const Icon(Icons.add),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: SafeArea(
         child: RefreshIndicator(
           // Pull-to-refresh untuk memuat ulang data
@@ -224,9 +311,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: CustomScrollView(
             slivers: [
               // ── Filter Periode ─────────────────────────────────────────────
-              SliverToBoxAdapter(
-                child: _buildPeriodeFilter(),
-              ),
+              SliverToBoxAdapter(child: _buildPeriodeFilter()),
 
               // ── Card Ringkasan Saldo ───────────────────────────────────────
               SliverToBoxAdapter(
@@ -247,16 +332,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   },
                 ),
               ),
-              SliverToBoxAdapter(
-                child: _buildDompetList(),
-              ),
+              SliverToBoxAdapter(child: _buildDompetList()),
 
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
               // ── Section Riwayat Transaksi ──────────────────────────────────
-              SliverToBoxAdapter(
-                child: _buildTransaksiHeader(),
-              ),
+              SliverToBoxAdapter(child: _buildTransaksiHeader()),
 
               // Konten transaksi: loading / kosong / daftar
               if (_isLoading)
@@ -273,9 +354,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               else if (_transaksiFiltered.isEmpty)
                 SliverToBoxAdapter(child: _buildEmptyState())
               else
-                SliverToBoxAdapter(
-                  child: _buildTransaksiList(),
-                ),
+                SliverToBoxAdapter(child: _buildTransaksiList()),
 
               // Padding bawah agar konten tidak tertutup navbar
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -308,8 +387,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onTap: () => _onPeriodeChanged(entry.key),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(
                 // Tab aktif menggunakan warna putih, tidak aktif transparan
                 color: isActive ? Colors.white : Colors.transparent,
@@ -321,8 +399,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: isActive
                       ? const Color(0xFF12141E) // teks gelap di tab aktif
                       : Colors.white54,
-                  fontWeight:
-                      isActive ? FontWeight.w600 : FontWeight.normal,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
                   fontSize: 13,
                 ),
               ),
@@ -377,9 +454,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           // Nominal total saldo (bisa disembunyikan)
           Text(
-            _saldoTerlihat
-                ? CurrencyFormatter.format(_totalSaldo)
-                : '••••••••',
+            _saldoTerlihat ? CurrencyFormatter.format(_totalSaldo) : '••••••••',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 28,
@@ -477,10 +552,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   /// Membangun header section dengan judul dan tombol titik tiga
-  Widget _buildSectionHeader({
-    required String title,
-    VoidCallback? onMore,
-  }) {
+  Widget _buildSectionHeader({required String title, VoidCallback? onMore}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -537,7 +609,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Text(
-            'Transaksi Terakhir',
+            'Riwayat 3 Transaksi Terbaru',
             style: TextStyle(
               color: Colors.white,
               fontSize: 16,
@@ -545,15 +617,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
           GestureDetector(
-            onTap: () {
-              // TODO: Navigasi ke halaman semua transaksi
-            },
+            onTap: _openAllTransactions,
             child: const Text(
               'Lihat Semua',
-              style: TextStyle(
-                color: Color(0xFF4A90D9),
-                fontSize: 13,
-              ),
+              style: TextStyle(color: Color(0xFF4A90D9), fontSize: 13),
             ),
           ),
         ],
@@ -561,64 +628,83 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// Membangun daftar transaksi yang dikelompokkan per tanggal
+  /// Membangun daftar 3 transaksi terbaru di dashboard
   Widget _buildTransaksiList() {
-    final grouped = _transaksiPerTanggal;
+    final latest = _latestTransaksi;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: grouped.entries.map((entry) {
-          final dateKey = entry.key;
-          final transaksi = entry.value;
-          final totalHari = _totalPerTanggal(transaksi);
-          final isPositif = totalHari >= 0;
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-
-              // Header tanggal dengan total bersih hari itu
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          ...latest.map(
+            (t) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Expanded(
+                    child: TransactionCard(
+                      transaction: t,
+                      onTap: () => _openEditTransaction(t),
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    color: const Color(0xFF1E2130),
+                    icon: const Icon(Icons.more_vert, color: Colors.white54),
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        _openEditTransaction(t);
+                      } else if (value == 'delete') {
+                        _deleteTransaction(t);
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'edit', child: Text('Edit')),
+                      PopupMenuItem(value: 'delete', child: Text('Hapus')),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (latest.isNotEmpty && _transaksiFiltered.length > 3) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: _openAllTransactions,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: const [
                   Text(
-                    _formatTanggalHeader(dateKey),
-                    style: const TextStyle(
-                      color: Colors.white70,
+                    'Lihat semua transaksi',
+                    style: TextStyle(
+                      color: Color(0xFF4A90D9),
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  Text(
-                    // Tampilkan tanda + atau - di depan total harian
-                    '${isPositif ? '+' : ''}${CurrencyFormatter.format(totalHari.abs())}',
-                    style: TextStyle(
-                      color: isPositif
-                          ? const Color(0xFF2ECC71)
-                          : const Color(0xFFE74C3C),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  SizedBox(width: 6),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    color: Color(0xFF4A90D9),
+                    size: 14,
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-
-              // Daftar transaksi untuk tanggal ini
-              ...transaksi.map(
-                (t) => TransactionCard(
-                  transaction: t,
-                  onTap: () {
-                    // TODO: Navigasi ke detail transaksi
-                  },
+            ),
+          ],
+          if (latest.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                'Belum ada transaksi terbaru. Tekan tombol + untuk menambahkan.',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 13,
                 ),
               ),
-            ],
-          );
-        }).toList(),
+            ),
+        ],
       ),
     );
   }
