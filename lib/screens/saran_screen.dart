@@ -22,282 +22,306 @@ class _SaranScreenState extends State<SaranScreen> {
     setState(() {
       _isLoading = true;
       _isError = false;
+      _saran = ''; // Reset agar animasi muncul dari awal
     });
 
-    final transactions = await _transactionService.getAll();
-    final saran = await _geminiService.getSaranKeuangan(transactions);
+    try {
+      final transactions = await _transactionService.getAll();
+      final saran = await _geminiService.getSaranKeuangan(transactions);
 
-    // Cek apakah hasil adalah error
-    final isError =
-        saran.startsWith('⏳') ||
-        saran.startsWith('🔑') ||
-        saran.startsWith('📶') ||
-        saran.startsWith('❌');
+      final isError =
+          saran.startsWith('⏳') ||
+          saran.startsWith('🔑') ||
+          saran.startsWith('📶') ||
+          saran.startsWith('❌');
 
-    setState(() {
-      _isLoading = false;
-      if (isError) {
+      setState(() {
+        _isLoading = false;
+        if (isError) {
+          _isError = true;
+          _errorMsg = saran;
+        } else {
+          _saran = saran;
+          _isError = false;
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
         _isError = true;
-        _errorMsg = saran;
-      } else {
-        _saran = saran;
-        _isError = false;
-      }
-    });
+        _errorMsg =
+            '❌ Terjadi kesalahan saat mengambil saran. Silakan coba lagi.';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF12141E),
+      backgroundColor: const Color(0xFF0F111A), // Warna background lebih deep
       appBar: AppBar(
-        backgroundColor: const Color(0xFF12141E),
+        backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text(
-          'AI Saran',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
+          'AI Penasehat Keuanganku',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
+        centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-        child: Column(
+      body: SafeArea(
+        bottom: true,
+        child: Stack(
           children: [
-            // ── Badge Gemini ───────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E2130),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFF2D3BB5).withOpacity(0.5),
+            // Dekorasi Background (Glow Effect)
+            Positioned(
+              top: -50,
+              right: -50,
+              child: Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF2D3BB5).withOpacity(0.15),
                 ),
               ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: Column(
                 children: [
-                  Icon(Icons.auto_awesome, color: Colors.amber, size: 14),
-                  SizedBox(width: 6),
-                  Text(
-                    'Powered by Gemini 2.5 Flash',
-                    style: TextStyle(color: Colors.white60, fontSize: 12),
+                  _buildGeminiBadge(),
+                  const SizedBox(height: 24),
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 500),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: Curves.easeIn,
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(opacity: animation, child: child);
+                      },
+                      child: _isLoading
+                          ? _buildLoadingState()
+                          : _isError
+                          ? _buildErrorState()
+                          : _saran.isEmpty
+                          ? _buildEmptyState()
+                          : _buildSuccessState(),
+                    ),
                   ),
+                  const SizedBox(height: 18),
+                  _buildActionButton(),
                 ],
               ),
             ),
-
-            const SizedBox(height: 24),
-
-            // ── Konten Utama ───────────────────────────────────────────
-            Expanded(
-              child: _isLoading
-                  ? _buildLoading()
-                  : _isError
-                  ? _buildError()
-                  : _saran.isEmpty
-                  ? _buildEmpty()
-                  : _buildHasilSaran(),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ── Tombol ─────────────────────────────────────────────────
-            _buildTombol(),
           ],
         ),
       ),
     );
   }
 
-  // ── Widget Loading ───────────────────────────────────────────────────
-  Widget _buildLoading() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 40,
-            height: 40,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.5,
-              color: const Color(0xFF4B5EE4),
-              backgroundColor: Colors.white.withOpacity(0.08),
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Menganalisis keuanganmu...',
-            style: TextStyle(color: Colors.white70, fontSize: 14),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Biasanya butuh 5-10 detik',
-            style: TextStyle(color: Colors.white30, fontSize: 12),
-          ),
-        ],
+  // 1. Badge Gemini yang lebih menarik
+  Widget _buildGeminiBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E2130),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF2D3BB5).withOpacity(0.3)),
       ),
-    );
-  }
-
-  // ── Widget Error ─────────────────────────────────────────────────────
-  Widget _buildError() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.red.withOpacity(0.2)),
-            ),
-            child: const Icon(
-              Icons.wifi_off_rounded,
-              color: Colors.redAccent,
-              size: 36,
-            ),
-          ),
-          const SizedBox(height: 16),
+          Icon(Icons.auto_awesome, color: Colors.amber, size: 16),
+          SizedBox(width: 8),
           Text(
-            _errorMsg,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
-              height: 1.6,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Widget Kosong (belum ada saran) ──────────────────────────────────
-  Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Ilustrasi sederhana
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: const Color(0xFF2D3BB5).withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Center(
-              child: Text('🤖', style: TextStyle(fontSize: 36)),
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Belum ada analisis',
+            'Powered by Gemini 2.5 Flash',
             style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+              color: Colors.white70,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
             ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Tekan tombol di bawah untuk mendapatkan\nsaran keuangan dari AI',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white38, fontSize: 13, height: 1.6),
           ),
         ],
       ),
     );
   }
 
-  // ── Widget Hasil Saran ───────────────────────────────────────────────
-  Widget _buildHasilSaran() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Label waktu
-          Row(
-            children: [
-              const Icon(
-                Icons.check_circle_rounded,
-                color: Colors.greenAccent,
-                size: 14,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Analisis selesai',
-                style: TextStyle(
-                  color: Colors.greenAccent.withOpacity(0.8),
-                  fontSize: 12,
-                ),
-              ),
-            ],
+  // 2. Tampilan Sebelum Analisis (Empty State)
+  Widget _buildEmptyState() {
+    return Column(
+      key: const ValueKey(1),
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E2130).withOpacity(0.5),
+            shape: BoxShape.circle,
           ),
-          const SizedBox(height: 14),
+          child: const Icon(
+            // child: Icon(Icons.insights_rounded, size: 80, color: Colors.white.withOpacity(0.2)),
+            Icons.insights_rounded,
+            size: 80,
+            color: Color(0xFF4B5EE4),
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Siap Mengatur Keuangan?',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'AI akan menganalisis transaksimu dan memberikan strategi finansial terbaik untukmu.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.white38, fontSize: 14, height: 1.5),
+        ),
+      ],
+    );
+  }
 
-          // Kartu hasil saran
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E2130),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.06)),
+  // 3. Tampilan Loading (Analysing State)
+  Widget _buildLoadingState() {
+    return Column(
+      key: const ValueKey(2),
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const SizedBox(
+          width: 60,
+          height: 60,
+          child: CircularProgressIndicator(
+            strokeWidth: 3,
+            color: Color(0xFF4B5EE4),
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Mengkalkulasi Data...',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Ini membutuhkan waktu sekitar 5 detik',
+          style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  // 4. Tampilan Hasil Analisis (Success State)
+  Widget _buildSuccessState() {
+    return SingleChildScrollView(
+      key: const ValueKey(3),
+      physics: const BouncingScrollPhysics(),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E2130),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withOpacity(0.05)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(
+                  Icons.tips_and_updates_rounded,
+                  color: Colors.amber,
+                  size: 20,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'Rekomendasi AI',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
             ),
-            child: Text(
+            const Divider(color: Colors.white10, height: 32),
+            Text(
               _saran,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 14,
+                fontSize: 15,
                 height: 1.8,
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  // ── Tombol Minta Saran ───────────────────────────────────────────────
-  Widget _buildTombol() {
+  // 5. Tampilan Error
+  Widget _buildErrorState() {
+    return Column(
+      key: const ValueKey(4),
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.cloud_off_rounded, color: Colors.redAccent, size: 60),
+        const SizedBox(height: 16),
+        Text(
+          _errorMsg,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.white70),
+        ),
+      ],
+    );
+  }
+
+  // 6. Tombol Aksi Utama
+  Widget _buildActionButton() {
     return SizedBox(
       width: double.infinity,
-      height: 50,
+      height: 56,
       child: ElevatedButton(
         onPressed: _isLoading ? null : _getMintaSaran,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF2D3BB5),
           disabledBackgroundColor: const Color(0xFF2D3BB5).withOpacity(0.3),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
           ),
           elevation: 0,
         ),
         child: _isLoading
             ? const SizedBox(
-                width: 18,
-                height: 18,
+                width: 20,
+                height: 20,
                 child: CircularProgressIndicator(
+                  color: Colors.white,
                   strokeWidth: 2,
-                  color: Colors.white54,
                 ),
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.auto_awesome, color: Colors.white, size: 16),
-                  const SizedBox(width: 8),
+                  Icon(
+                    _saran.isEmpty
+                        ? Icons.analytics_outlined
+                        : Icons.refresh_rounded,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 10),
                   Text(
-                    _saran.isEmpty ? 'Analisis Sekarang' : 'Analisis Ulang',
+                    _saran.isEmpty ? 'Mulai Analisis' : 'Analisis Ulang',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],
