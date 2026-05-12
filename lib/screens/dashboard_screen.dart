@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/transaction_model.dart';
+import '../providers/transaction_provider.dart';
 import '../providers/wallet_provider.dart';
 import '../services/transaction_service.dart';
 import '../utils/currency_formatter.dart';
@@ -18,90 +19,41 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final TransactionService _transactionService = TransactionService();
-
   PeriodeFilter _periodeAktif = PeriodeFilter.bulan;
-  List<TransactionModel> _transaksiFiltered = [];
-  bool _isLoading = true;
   bool _saldoTerlihat = true;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    try {
-      final semua = await _transactionService.getAll();
-      setState(() {
-        _transaksiFiltered = _filterByPeriode(semua, _periodeAktif);
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memuat data: $e')),
-        );
-      }
-    }
+    TransactionProviderScope.of(context).loadFromSupabase();
   }
 
-  List<TransactionModel> _filterByPeriode(
-    List<TransactionModel> semua,
-    PeriodeFilter periode,
-  ) {
-    final now = DateTime.now();
-    switch (periode) {
-      case PeriodeFilter.hari:
-        return semua.where((t) =>
-          t.tanggal.year == now.year &&
-          t.tanggal.month == now.month &&
-          t.tanggal.day == now.day).toList();
-      case PeriodeFilter.minggu:
-        final weekAgo = now.subtract(const Duration(days: 7));
-        return semua.where((t) => t.tanggal.isAfter(weekAgo)).toList();
-      case PeriodeFilter.bulan:
-        return semua.where((t) =>
-          t.tanggal.year == now.year &&
-          t.tanggal.month == now.month).toList();
-      case PeriodeFilter.tahun:
-        return semua.where((t) => t.tanggal.year == now.year).toList();
-      case PeriodeFilter.semua:
-        return semua;
-    }
+  void _onPeriodeChanged(PeriodeFilter periode) {
+    setState(() => _periodeAktif = periode);
   }
 
-  void _onPeriodeChanged(PeriodeFilter periode) async {
-    setState(() { _periodeAktif = periode; _isLoading = true; });
-    try {
-      final semua = await _transactionService.getAll();
-      setState(() {
-        _transaksiFiltered = _filterByPeriode(semua, periode);
-        _isLoading = false;
-      });
-    } catch (_) {
-      setState(() => _isLoading = false);
-    }
+  List<TransactionModel> get _transaksiFiltered {
+    final provider = TransactionProviderScope.of(context);
+    final periodeStr = _periodeAktif.name; // 'hari','minggu','bulan','tahun','semua'
+    return provider.filterByPeriode(periodeStr);
   }
 
-  int get _totalPemasukan => _transaksiFiltered
-      .where((t) => t.tipe == 'pemasukan')
-      .fold(0, (s, t) => s + t.nominal);
+  int get _totalPemasukan {
+    final provider = TransactionProviderScope.of(context);
+    return provider.totalPemasukan(_transaksiFiltered);
+  }
 
-  int get _totalPengeluaran => _transaksiFiltered
-      .where((t) => t.tipe == 'pengeluaran')
-      .fold(0, (s, t) => s + t.nominal);
+  int get _totalPengeluaran {
+    final provider = TransactionProviderScope.of(context);
+    return provider.totalPengeluaran(_transaksiFiltered);
+  }
 
   int get _totalSaldo => WalletProviderScope.of(context).totalSaldo;
 
-  /// Transaksi minggu ini (7 hari terakhir), diurutkan terbaru
+  /// Transaksi minggu ini, diurutkan terbaru
   List<TransactionModel> get _transaksiMingguIni {
     final now = DateTime.now();
     final weekAgo = now.subtract(const Duration(days: 7));
-    final list = _transaksiFiltered
+    final list = TransactionProviderScope.of(context)
+        .transactions
         .where((t) => t.tanggal.isAfter(weekAgo))
         .toList();
     list.sort((a, b) => b.tanggal.compareTo(a.tanggal));
@@ -126,14 +78,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _openEditTransaction(TransactionModel t) async {
-    final updated = await Navigator.push<TransactionModel?>(
+    await Navigator.push<TransactionModel?>(
       context,
       MaterialPageRoute(
         builder: (_) => TambahTransaksiScreen(transaction: t),
         fullscreenDialog: true,
       ),
     );
-    if (updated != null) await _loadData();
+    // Tidak perlu reload — Realtime akan update otomatis
   }
 
   Future<void> _deleteTransaction(TransactionModel t) async {
@@ -162,19 +114,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
     if (confirmed != true) return;
     try {
-      await _transactionService.delete(t.id!);
-      if (!mounted) return;
-      await _loadData();
+      await TransactionService().delete(t.id!);
+      // Realtime akan update list otomatis
       messenger.showSnackBar(
           const SnackBar(content: Text('Transaksi berhasil dihapus.')));
     } catch (e) {
-      if (!mounted) return;
       messenger.showSnackBar(
           SnackBar(content: Text('Gagal menghapus: $e')));
     }
   }
 
-  // ─── Build ────────────────────────────────────────────────────────────────
+  bool get _isLoading => TransactionProviderScope.of(context).isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -183,8 +133,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: SafeArea(
         bottom: false, // biarkan konten extend ke bawah navbar floating
         child: RefreshIndicator(
-          onRefresh: _loadData,
-          color: const Color(0xFF4A90D9),
+          onRefresh: _loadData,          color: const Color(0xFF4A90D9),
           backgroundColor: const Color(0xFF1E2130),
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -230,7 +179,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 SliverToBoxAdapter(child: _buildEmptyState())
               else
                 SliverToBoxAdapter(child: _buildTransaksiList()),
-
               // Padding bawah adaptif: navbar (64) + padding navbar (24) + system bar
               SliverToBoxAdapter(
                 child: SizedBox(

@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/transaction_model.dart';
 import '../models/wallet_model.dart';
 import '../services/transaction_service.dart';
 import '../services/wallet_service.dart';
 
 /// Provider untuk berbagi state daftar dompet antara semua screen.
+/// Menggunakan Supabase Realtime agar semua device sync otomatis.
 class WalletProvider extends ChangeNotifier {
   final _service = WalletService();
   final _txService = TransactionService();
+  final _supabase = Supabase.instance.client;
 
   final List<WalletModel> _dompet = [];
   bool _isLoaded = false;
+  RealtimeChannel? _channel;
 
   List<WalletModel> get dompet => List.unmodifiable(_dompet);
   bool get isLoaded => _isLoaded;
@@ -18,7 +22,7 @@ class WalletProvider extends ChangeNotifier {
   int get totalSaldo =>
       _dompet.where((w) => !w.dikecualikan).fold(0, (s, w) => s + w.saldo);
 
-  // ── Load ──────────────────────────────────────────────────────────────────
+  // ── Load & Realtime ───────────────────────────────────────────────────────
 
   Future<void> loadFromSupabase() async {
     try {
@@ -30,26 +34,83 @@ class WalletProvider extends ChangeNotifier {
       notifyListeners();
     } catch (_) {
       if (_dompet.isEmpty) {
-        _dompet.addAll([
-          WalletModel(id: '', nama: 'Cash', tipe: 'CASH', saldo: 0,
-              warna: const Color(0xFF2A2D3E)),
-          WalletModel(id: '', nama: 'BRI', tipe: 'BANK', saldo: 0,
-              namaBank: 'BRI', warna: const Color(0xFF1A3A5C)),
-        ]);
         _isLoaded = true;
         notifyListeners();
       }
     }
+    _subscribeRealtime();
+  }
+
+  void _subscribeRealtime() {
+    _channel?.unsubscribe();
+    _channel = _supabase
+        .channel('wallets_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'wallets',
+          callback: (payload) => _handleInsert(payload.newRecord),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'wallets',
+          callback: (payload) => _handleUpdate(payload.newRecord),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.delete,
+          schema: 'public',
+          table: 'wallets',
+          callback: (payload) => _handleDelete(payload.oldRecord),
+        )
+        .subscribe();
+  }
+
+  void _handleInsert(Map<String, dynamic> record) {
+    try {
+      final wallet = WalletService.fromMapStatic(record);
+      if (!_dompet.any((w) => w.id == wallet.id)) {
+        _dompet.add(wallet);
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  void _handleUpdate(Map<String, dynamic> record) {
+    try {
+      final wallet = WalletService.fromMapStatic(record);
+      final idx = _dompet.indexWhere((w) => w.id == wallet.id);
+      if (idx >= 0) {
+        _dompet[idx] = wallet;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  void _handleDelete(Map<String, dynamic> record) {
+    try {
+      final id = record['id'] as String?;
+      if (id != null) {
+        _dompet.removeWhere((w) => w.id == id);
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _channel?.unsubscribe();
+    super.dispose();
   }
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
 
-  /// Tambah dompet baru. Jika saldo > 0, buat transaksi pemasukan otomatis.
   Future<void> tambah(WalletModel wallet) async {
     final saved = await _service.insert(wallet);
-    _dompet.add(saved);
-    notifyListeners();
-
+    if (!_dompet.any((w) => w.id == saved.id)) {
+      _dompet.add(saved);
+      notifyListeners();
+    }
     if (saved.saldo > 0 && _isValidUuid(saved.id)) {
       await _buatTransaksiSaldo(
         walletId: saved.id,
@@ -61,17 +122,14 @@ class WalletProvider extends ChangeNotifier {
     }
   }
 
-  /// Edit dompet. Jika saldo berubah, buat transaksi penyesuaian otomatis.
   Future<void> edit(WalletModel updated) async {
     final idx = _dompet.indexWhere((w) => w.id == updated.id);
     final saldoLama = idx >= 0 ? _dompet[idx].saldo : 0;
-
     if (idx >= 0) _dompet[idx] = updated;
     notifyListeners();
 
     if (_isValidUuid(updated.id)) {
       await _service.update(updated);
-
       final selisih = updated.saldo - saldoLama;
       if (selisih != 0) {
         await _buatTransaksiSaldo(
@@ -85,16 +143,12 @@ class WalletProvider extends ChangeNotifier {
     }
   }
 
-  /// Hapus dompet
   Future<void> hapus(String id) async {
     _dompet.removeWhere((w) => w.id == id);
     notifyListeners();
-    if (_isValidUuid(id)) {
-      await _service.delete(id);
-    }
+    if (_isValidUuid(id)) await _service.delete(id);
   }
 
-  /// Update saldo dompet setelah transaksi (tidak buat transaksi baru)
   Future<void> updateSaldo(String id, int delta) async {
     final idx = _dompet.indexWhere((w) => w.id == id);
     if (idx < 0) return;
@@ -106,9 +160,7 @@ class WalletProvider extends ChangeNotifier {
     );
     notifyListeners();
     if (_isValidUuid(id)) {
-      try {
-        await _service.updateSaldo(id, saldoBaru);
-      } catch (_) {}
+      try { await _service.updateSaldo(id, saldoBaru); } catch (_) {}
     }
   }
 
@@ -131,9 +183,7 @@ class WalletProvider extends ChangeNotifier {
         tanggal: DateTime.now(),
         walletId: walletId,
       ));
-    } catch (_) {
-      // Gagal buat transaksi tidak menghentikan operasi dompet
-    }
+    } catch (_) {}
   }
 
   bool _isValidUuid(String id) {

@@ -71,30 +71,28 @@ class WalletService {
 
   // ── Konversi ──────────────────────────────────────────────────────────────
 
-  WalletModel _fromMap(Map<String, dynamic> map) {
+  /// Static version untuk dipakai dari WalletProvider (Realtime callback)
+  static WalletModel fromMapStatic(Map<String, dynamic> map) {
     final tipe = map['tipe'] as String;
-    // Warna ditentukan dari tipe karena tidak disimpan di DB
-    final warna = _warnaFromTipe(tipe);
     return WalletModel(
       id: map['id'] as String,
       nama: map['nama'] as String,
       tipe: tipe,
       saldo: (map['saldo'] as num).toInt(),
       namaBank: map['nama_bank'] as String?,
-      warna: warna,
+      warna: _warnaFromTipeStatic(tipe),
     );
   }
 
-  Color _warnaFromTipe(String tipe) {
+  static Color _warnaFromTipeStatic(String tipe) {
     switch (tipe) {
-      case 'BANK':
-        return const Color(0xFF1A3A5C);
-      case 'E-WALLET':
-        return const Color(0xFF1A3A2A);
-      default:
-        return const Color(0xFF2A2D3E);
+      case 'BANK': return const Color(0xFF1A3A5C);
+      case 'E-WALLET': return const Color(0xFF1A3A2A);
+      default: return const Color(0xFF2A2D3E);
     }
   }
+
+  WalletModel _fromMap(Map<String, dynamic> map) => WalletService.fromMapStatic(map);
 
   Map<String, dynamic> _toMap(WalletModel w) {
     return {
