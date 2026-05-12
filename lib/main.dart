@@ -2,7 +2,6 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
-import 'screens/home_screen.dart';
 import 'screens/dashboard_screen.dart'; // Import ini jika ingin langsung ke Dashboard
 
 void main() async {

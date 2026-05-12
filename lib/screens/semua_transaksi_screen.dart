@@ -5,7 +5,14 @@ import '../services/transaction_service.dart';
 import '../widgets/transaction_card.dart';
 
 class SemuaTransaksiScreen extends StatefulWidget {
-  const SemuaTransaksiScreen({super.key});
+  final List<TransactionModel>? initialTransactions;
+  final void Function(TransactionModel transaction)? onTransactionDeleted;
+
+  const SemuaTransaksiScreen({
+    super.key,
+    this.initialTransactions,
+    this.onTransactionDeleted,
+  });
 
   @override
   State<SemuaTransaksiScreen> createState() => _SemuaTransaksiScreenState();
@@ -19,7 +26,11 @@ class _SemuaTransaksiScreenState extends State<SemuaTransaksiScreen> {
   @override
   void initState() {
     super.initState();
-    _loadTransactions();
+    _transactions = widget.initialTransactions ?? [];
+    _isLoading = _transactions.isEmpty;
+    if (_transactions.isEmpty) {
+      _loadTransactions();
+    }
   }
 
   Future<void> _loadTransactions() async {
@@ -90,6 +101,7 @@ class _SemuaTransaksiScreenState extends State<SemuaTransaksiScreen> {
     if (confirmed != true) return;
     try {
       await _transactionService.delete(transaction.id!);
+      widget.onTransactionDeleted?.call(transaction);
       if (!mounted) return;
       await _loadTransactions();
       messenger.showSnackBar(

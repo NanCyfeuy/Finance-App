@@ -35,6 +35,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Semua transaksi yang sudah difilter sesuai periode
   List<TransactionModel> _transaksiFiltered = [];
 
+  /// Semua transaksi mentah yang sudah diambil dari Supabase
+  List<TransactionModel> _allTransactions = [];
+
   /// Status loading data dari Supabase
   bool _isLoading = true;
 
@@ -92,6 +95,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final semua = await _transactionService.getAll();
       setState(() {
+        _allTransactions = semua;
         _transaksiFiltered = _filterByPeriode(semua, _periodeAktif);
         _isLoading = false;
       });
@@ -181,15 +185,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return latest.take(3).toList();
   }
 
-  /// Terapkan perubahan saldo pada dompet default ketika menambah transaksi baru.
-  void _applyTransactionToWallet(TransactionModel transaction) {
+  int _walletDeltaFromTransaction(TransactionModel transaction) {
+    return transaction.tipe == 'pemasukan'
+        ? transaction.nominal
+        : -transaction.nominal;
+  }
+
+  void _updateDefaultWalletBalance(int delta) {
     final defaultIndex = _daftarDompet.indexWhere((wallet) => wallet.id == '1');
     if (defaultIndex < 0) return;
 
     final wallet = _daftarDompet[defaultIndex];
-    final delta = transaction.tipe == 'pemasukan'
-        ? transaction.nominal
-        : -transaction.nominal;
     final updatedWallet = WalletModel(
       id: wallet.id,
       nama: wallet.nama,
@@ -202,6 +208,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() {
       _daftarDompet[defaultIndex] = updatedWallet;
     });
+  }
+
+  /// Terapkan perubahan saldo pada dompet default ketika menambah transaksi baru.
+  void _applyTransactionToWallet(TransactionModel transaction) {
+    _updateDefaultWalletBalance(_walletDeltaFromTransaction(transaction));
+  }
+
+  void _reverseTransactionOnWallet(TransactionModel transaction) {
+    _updateDefaultWalletBalance(-_walletDeltaFromTransaction(transaction));
+  }
+
+  void _applyEditedTransactionToWallet(
+    TransactionModel oldTransaction,
+    TransactionModel newTransaction,
+  ) {
+    _reverseTransactionOnWallet(oldTransaction);
+    _applyTransactionToWallet(newTransaction);
   }
 
   /// Buka layar tambah transaksi dan reload data saat transaksi baru disimpan.
@@ -223,7 +246,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _openAllTransactions() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const SemuaTransaksiScreen()),
+      MaterialPageRoute(
+        builder: (_) => SemuaTransaksiScreen(
+          initialTransactions: _allTransactions,
+          onTransactionDeleted: _reverseTransactionOnWallet,
+        ),
+      ),
     );
   }
 
@@ -237,6 +265,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
 
     if (updated != null) {
+      _applyEditedTransactionToWallet(transaction, updated);
       await _loadData();
     }
   }
@@ -277,6 +306,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     try {
       await _transactionService.delete(transaction.id!);
+      _reverseTransactionOnWallet(transaction);
       if (!mounted) return;
       await _loadData();
       messenger.showSnackBar(
