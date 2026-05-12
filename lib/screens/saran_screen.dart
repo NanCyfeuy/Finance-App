@@ -69,7 +69,7 @@ class _SaranScreenState extends State<SaranScreen> {
         centerTitle: true,
       ),
       body: SafeArea(
-        bottom: true,
+        bottom: false, // biarkan konten extend ke bawah navbar
         child: Stack(
           children: [
             // Dekorasi Background (Glow Effect)
@@ -86,7 +86,7 @@ class _SaranScreenState extends State<SaranScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 160),
               child: Column(
                 children: [
                   _buildGeminiBadge(),

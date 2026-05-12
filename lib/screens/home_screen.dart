@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dashboard_screen.dart';
@@ -22,15 +24,13 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  /// Indeks halaman yang sedang aktif
   int _currentIndex = 0;
 
-  /// Daftar halaman yang bisa diakses via navbar
   final List<Widget> _pages = const [
-    DashboardScreen(), // index 0 - Dashboard
-    StatistikScreen(), // index 1 - Statistik
-    DompetScreen(), // index 2 - Dompet
-    SaranScreen(), // index 3 - Saran Keuangan AI
+    DashboardScreen(),
+    StatistikScreen(),
+    DompetScreen(),
+    SaranScreen(),
   ];
 
   /// Mengganti halaman aktif dan memberikan haptic feedback
@@ -54,148 +54,140 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF12141E),
-
-      // Gunakan IndexedStack agar state setiap halaman tetap terjaga
-      // saat berpindah tab (tidak di-rebuild dari awal)
-      body: IndexedStack(index: _currentIndex, children: _pages),
-
-      // Sembunyikan default bottom nav bar karena kita buat custom
-      extendBody: true,
-
-      // ── Floating Action Button (Tambah Transaksi) ──────────────────────────
-      floatingActionButton: _buildFAB(),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endDocked,
-
-      // ── Bottom Navigation Bar Custom ───────────────────────────────────────
-      bottomNavigationBar: _buildBottomNavBar(),
-    );
-  }
-
-  /// Membangun floating action button "+" untuk tambah transaksi
-  Widget _buildFAB() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: FloatingActionButton(
-        onPressed: _onFabTap,
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF12141E),
-        elevation: 4,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add, size: 28),
+    return Theme(
+      data: Theme.of(context).copyWith(canvasColor: Colors.transparent),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        extendBody: true,
+        extendBodyBehindAppBar: true,
+        body: _buildPageWithFade(),
+        bottomNavigationBar: _buildBottomNavBar(),
       ),
     );
   }
 
-  /// Membangun bottom navigation bar dengan desain floating pill (kapsul)
+  /// Fade transition saat berpindah tab
+  Widget _buildPageWithFade() {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
+      child: KeyedSubtree(
+        key: ValueKey<int>(_currentIndex),
+        child: _pages[_currentIndex],
+      ),
+    );
+  }
+
   Widget _buildBottomNavBar() {
     return Padding(
-      // Padding agar navbar tidak menempel di tepi layar
-      padding: const EdgeInsets.fromLTRB(16, 0, 80, 16),
-      child: Container(
-        height: 64,
-        decoration: BoxDecoration(
-          // Warna navbar sedikit lebih terang dari background
-          color: const Color(0xFF1E2130),
-          borderRadius: BorderRadius.circular(32), // bentuk pill/kapsul
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // ── Pill navbar dengan blur + transparan ─────────────────────────
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(36),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                child: Container(
+                  height: 68,
+                  decoration: BoxDecoration(
+                    // Transparan dengan sedikit warna gelap
+                    color: const Color(0xFF1A1D2E).withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(36),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildNavItem(index: 0, icon: Icons.home_outlined,
+                          activeIcon: Icons.home_rounded),
+                      _buildNavItem(index: 1, icon: Icons.bar_chart_outlined,
+                          activeIcon: Icons.bar_chart_rounded),
+                      _buildNavItem(index: 2, icon: Icons.wallet_outlined,
+                          activeIcon: Icons.wallet_rounded),
+                      _buildNavItem(index: 3, icon: Icons.auto_awesome_outlined,
+                          activeIcon: Icons.auto_awesome),
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            // ── Tab Dashboard ──────────────────────────────────────────────
-            _buildNavItem(
-              index: 0,
-              icon: Icons.home_outlined,
-              activeIcon: Icons.home_rounded,
-              label: 'Dashboard',
-            ),
+          ),
 
-            // ── Tab Statistik ──────────────────────────────────────────────
-            _buildNavItem(
-              index: 1,
-              icon: Icons.bar_chart_outlined,
-              activeIcon: Icons.bar_chart_rounded,
-              label: 'Statistik',
-            ),
+          const SizedBox(width: 12),
 
-            // ── Tab Dompet ─────────────────────────────────────────────────
-            _buildNavItem(
-              index: 2,
-              icon: Icons.wallet_outlined,
-              activeIcon: Icons.wallet_rounded,
-              label: 'Dompet',
+          // ── Tombol + bulat ───────────────────────────────────────────────
+          GestureDetector(
+            onTap: _onFabTap,
+            child: Container(
+              width: 68,
+              height: 68,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 16,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.add,
+                color: Color(0xFF12141E),
+                size: 32,
+              ),
             ),
-
-            // ── Tab Saran AI ─────────────────────────────────────────────────
-            _buildNavItem(
-              index: 3,
-              icon: Icons.auto_awesome_outlined,
-              activeIcon: Icons.auto_awesome_rounded,
-              label: 'AI Saran',
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  /// Membangun satu item navigasi di bottom navbar
-  ///
-  /// [index]      - indeks halaman yang dituju
-  /// [icon]       - ikon saat tidak aktif
-  /// [activeIcon] - ikon saat aktif (biasanya versi filled)
-  /// [label]      - label teks di bawah ikon
   Widget _buildNavItem({
     required int index,
     required IconData icon,
     required IconData activeIcon,
-    required String label,
   }) {
     final bool isActive = _currentIndex == index;
 
     return GestureDetector(
       onTap: () => _onNavTap(index),
-      behavior: HitTestBehavior.opaque, // area tap lebih luas
+      behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        width: 52,
+        height: 52,
         decoration: BoxDecoration(
-          // Latar lingkaran untuk tab yang aktif
+          // Lingkaran solid gelap saat aktif, transparan saat tidak aktif
           color: isActive
-              ? Colors.white.withValues(alpha: 0.12)
+              ? const Color(0xFF2E3248)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          shape: BoxShape.circle,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Ikon berubah antara outlined dan filled saat aktif
-            Icon(
-              isActive ? activeIcon : icon,
-              color: isActive ? Colors.white : Colors.white38,
-              size: 24,
-            ),
-            // Label hanya ditampilkan saat tab aktif
-            if (isActive) ...[
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ],
+        child: Center(
+          child: Icon(
+            isActive ? activeIcon : icon,
+            color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.4),
+            size: 24,
+          ),
         ),
       ),
     );

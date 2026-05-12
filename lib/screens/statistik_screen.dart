@@ -186,7 +186,7 @@ class _StatistikScreenState extends State<StatistikScreen>
                 backgroundColor: _surface,
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 160),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

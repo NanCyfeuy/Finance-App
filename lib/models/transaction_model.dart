@@ -6,6 +6,7 @@ class TransactionModel {
   final String kategori;
   final String? catatan;
   final DateTime tanggal;
+  final String? walletId;
 
   TransactionModel({
     this.id,
@@ -15,9 +16,9 @@ class TransactionModel {
     required this.kategori,
     this.catatan,
     required this.tanggal,
+    this.walletId,
   });
 
-  // Konversi dari Supabase (Map) ke Model
   factory TransactionModel.fromMap(Map<String, dynamic> map) {
     return TransactionModel(
       id: map['id'],
@@ -26,11 +27,14 @@ class TransactionModel {
       tipe: map['tipe'],
       kategori: map['kategori'],
       catatan: map['catatan'],
-      tanggal: DateTime.parse(map['tanggal']),
+      // Supabase mengembalikan timestamptz sebagai UTC (+00)
+      // DateTime.parse otomatis set isUtc=true jika ada +00/Z
+      // .toLocal() konversi ke timezone device
+      tanggal: DateTime.parse(map['tanggal']).toLocal(),
+      walletId: map['wallet_id'],
     );
   }
 
-  // Konversi dari Model ke Map (untuk kirim ke Supabase)
   Map<String, dynamic> toMap() {
     return {
       'judul': judul,
@@ -38,7 +42,10 @@ class TransactionModel {
       'tipe': tipe,
       'kategori': kategori,
       'catatan': catatan,
-      'tanggal': tanggal.toIso8601String(),
+      // Kirim sebagai UTC agar Supabase menyimpan dengan timezone yang benar
+      // DateTime.now() adalah local → .toUtc() konversi ke UTC → simpan ke DB
+      'tanggal': tanggal.toUtc().toIso8601String(),
+      'wallet_id': walletId,
     };
   }
 }

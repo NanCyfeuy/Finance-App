@@ -1,3 +1,3 @@
 class GeminiConfig {
-  static const String apiKey = 'gemini key';
+  static const String apiKey = 'AIzaSyAbGizvhIR9vL9DtduHj7KqmyoSRjRgllo';
 }
