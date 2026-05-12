@@ -613,7 +613,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Membangun daftar dompet yang bisa di-scroll horizontal
   Widget _buildDompetList() {
     return SizedBox(
-      height: 130, // tinggi kartu dompet
+      height: 160, // tinggi kartu dompet disesuaikan untuk menghindari overflow
       child: ListView.builder(
         // Scroll horizontal ke kiri dan kanan
         scrollDirection: Axis.horizontal,
