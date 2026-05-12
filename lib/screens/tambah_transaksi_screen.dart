@@ -154,7 +154,7 @@ class _TambahTransaksiScreenState extends State<TambahTransaksiScreen> {
                 children: [
                   Expanded(
                     child: _buildModeChip(
-                      label: 'Pemasukan',
+                      label: 'Pengeluaran',
                       icon: Icons.arrow_upward,
                       selected: _selectedMode == TransactionMode.pengeluaran,
                       color: const Color(0xFFE74C3C),
@@ -166,7 +166,7 @@ class _TambahTransaksiScreenState extends State<TambahTransaksiScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildModeChip(
-                      label: 'Pengeluaran',
+                      label: 'Pemasukan',
                       icon: Icons.arrow_downward,
                       selected: _selectedMode == TransactionMode.pemasukan,
                       color: const Color(0xFF2ECC71),
