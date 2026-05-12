@@ -39,9 +39,9 @@ dependencies:
   fl_chart: ^0.69.0 
   
   # Tampilan angka Rupiah
-  intl: ^0.19.0
-  
-  # Gemini
+  intl: ^0.20.2
+
+  #Gemini
   google_generative_ai: ^0.4.3
 
   # The following adds the Cupertino Icons font to your application.

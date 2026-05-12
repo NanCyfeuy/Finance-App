@@ -1,10 +1,10 @@
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
-import 'screens/home_screen.dart';
 import 'screens/saran_screen.dart';
+import 'screens/dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,22 +36,15 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Finance App',
       debugShowCheckedModeBanner: false,
-
-      // ── Tema Gelap ──────────────────────────────────────────────────────────
-      // Seluruh aplikasi menggunakan dark theme agar konsisten dengan desain
       theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF12141E),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF4A90D9),
+          seedColor: const Color(0xFF2D3BB5),
           brightness: Brightness.dark,
         ),
-        // Font default menggunakan sistem (bisa diganti dengan Google Fonts)
-        fontFamily: 'Roboto',
         useMaterial3: true,
       ),
 
-      home: const HomeScreen(),
+      home: const DashboardScreen(),
 
       routes: {
         // '/': (context) => const HomeScreen(),
